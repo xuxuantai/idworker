@@ -15,12 +15,6 @@ public class ScheduledTask {
 
 
     public void testGenerateId() {
-        long startTime = System.nanoTime();
-        for (int i = 0; i < 10000; i++) {
-            System.out.println(idService.getId());
-        }
-        long endTime = System.nanoTime();
-        System.out.println("耗时" + (endTime - startTime) / 1000000 + "ms");
 
     }
 
