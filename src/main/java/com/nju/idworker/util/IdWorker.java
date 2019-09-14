@@ -1,12 +1,15 @@
 package com.nju.idworker.util;
 
-import lombok.extern.log4j.Log4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 
 /**
  * Created by XXT on 2019/9/14.
  */
 public class IdWorker {
+
+    private static final Logger logger = LoggerFactory.getLogger(IdWorker.class);
     /**
      * 起始的时间戳
      */
@@ -27,7 +30,7 @@ public class IdWorker {
     private final static long MAX_SEQUENCE = -1L ^ (-1L << SEQUENCE_BIT);
 
     /**
-     * 每一部分向左的位移
+     * 每一部分向左的位移位数
      */
     private final static long MACHINE_LEFT = SEQUENCE_BIT;
     private final static long DATACENTER_LEFT = SEQUENCE_BIT + MACHINE_BIT;
@@ -60,48 +63,58 @@ public class IdWorker {
         this.machineId = machineId;
     }
 
-
-
     /**
-     * 产生下一个ID
-     *
+     * 生成下一个唯一ID
      * @return
      */
-    public synchronized long nextId() {
-        long currStmp = getNewstmp();
-        if (currStmp < lastStmp) {
-            throw new RuntimeException("发生时钟回拨，生成ID失败！");
+    public long nextId(){
+        return nextId(getNewstmp());
+    }
+
+    /**
+     * 生成指定时间的下一个Id
+     * @param currStmp
+     * @return
+     */
+    private synchronized long nextId(long currStmp){
+        if(currStmp < lastStmp){
+            //发生时钟回退
+            logger.warn("发生时钟回退：当前时间" + currStmp + "上一时间" + lastStmp);
+            currStmp = lastStmp;
         }
 
-        if (currStmp == lastStmp) {
+        if(currStmp == lastStmp){
             //相同毫秒内，序列号自增
-            sequence = (sequence + 1) & MAX_SEQUENCE;
-            //同一毫秒的序列数已经达到最大
-            if (sequence == 0L) {
-                currStmp = getNextMill();
+            sequence = ++sequence & MAX_SEQUENCE;
+            if (sequence == 0) {
+                //同一毫秒生成的序列数已满
+                logger.warn(currStmp + "时间同一毫秒生成的序列数已满，重新获取时间戳！");
+                return nextId(getNewstmp());
             }
-        } else {
-            //不同毫秒内，序列号置为0
-            sequence = 0L;
+        }else{
+            //更新上一时间
+            lastStmp = currStmp;
+            //重置序列号
+            sequence = 0;
         }
 
-        lastStmp = currStmp;
-
-        return (currStmp - START_STMP) << TIMESTMP_LEFT //时间戳部分
+        return(currStmp - START_STMP) << TIMESTMP_LEFT //时间戳部分
                 | datacenterId << DATACENTER_LEFT      //数据中心部分
                 | machineId << MACHINE_LEFT            //机器标识部分
                 | sequence;                            //序列号部分
     }
 
-    private long getNextMill() {
-        long mill = getNewstmp();
-        while (mill <= lastStmp) {
-            mill = getNewstmp();
-        }
-        return mill;
+    private long getNewstmp(){
+        return System.currentTimeMillis();
     }
 
-    private long getNewstmp() {
-        return System.currentTimeMillis();
+    public static void main(String[] args) {
+        IdWorker idWorker = new IdWorker(2, 3);
+        long startTime = System.nanoTime();
+        for (int i = 0; i < 10000; i++) {
+            System.out.println(idWorker.nextId());
+        }
+        System.out.println("生成10000个全局唯一Id耗时" + (System.nanoTime() - startTime) / 1000000 + "ms");
+
     }
 }
