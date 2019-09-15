@@ -31,10 +31,10 @@ public class Swagger2 {
 
     private ApiInfo apiInfo() {
         return new ApiInfoBuilder()
-                .title("Spring Boot中使用Swagger2构建RESTful APIs")
+                .title("分布式全局唯一ID生成器API")
                 .description("")
                 .termsOfServiceUrl("")
-                .contact("XXT")
+                .contact("续玄泰")
                 .version("1.0")
                 .build();
     }
