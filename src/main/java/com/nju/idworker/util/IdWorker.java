@@ -4,6 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 
+import java.util.Random;
+
 /**
  * Created by XXT on 2019/9/14.
  */
@@ -34,6 +36,7 @@ public class IdWorker {
     private long machineId;    //机器标识
     private long sequence = 0L; //序列号
     private long lastStmp = -1L;//上一次时间戳
+    private final Random RANDOM = new Random();//随机数生成下一毫秒第一个seq
 
     public IdWorker () {
         if (datacenterId > MAX_DATACENTER_NUM || datacenterId < 0) {
@@ -75,8 +78,21 @@ public class IdWorker {
     private synchronized long nextId(long currStmp){
         if(currStmp < lastStmp){
             //发生时钟回退
-            logger.warn("发生时钟回退：当前时间" + currStmp + "上一时间" + lastStmp);
-            currStmp = lastStmp;
+            long offset = lastStmp - currStmp;
+            if(offset <= 5){
+                //回退时间小于5，则等待
+                try{
+                    wait(offset << 1);
+                }catch (InterruptedException e){
+                    logger.error("发生时钟回退，线程等待，中断异常");
+                    e.printStackTrace();
+                }
+            }else {
+                logger.warn("发生时钟回退：且回退时间较长，放弃等待，重新获取时间戳！");
+                return nextId();
+            }
+//            logger.warn("发生时钟回退：当前时间" + currStmp + "上一时间" + lastStmp);
+//            currStmp = lastStmp;
         }
 
         if(currStmp == lastStmp){
@@ -84,15 +100,18 @@ public class IdWorker {
             sequence = ++sequence & MAX_SEQUENCE;
             if (sequence == 0) {
                 //同一毫秒生成的序列数已满
+                //对下一毫秒第一个序列号取0-10的随机数
+                sequence = RANDOM.nextInt(10);
                 logger.warn(currStmp + "时间同一毫秒生成的序列数已满，重新获取时间戳！");
-                return nextId(getNewstmp());
+                return nextId();
             }
         }else{
-            //更新上一时间
-            lastStmp = currStmp;
-            //重置序列号
-            sequence = 0;
+            //新的毫秒
+            //对下一毫秒第一个序列号取0-10的随机数
+            sequence = RANDOM.nextInt(10);
         }
+        //更新上一时间
+        lastStmp = currStmp;
 
         return(currStmp - START_STMP) << TIMESTMP_LEFT //时间戳部分
                 | datacenterId << DATACENTER_LEFT      //数据中心部分
